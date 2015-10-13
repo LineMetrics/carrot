@@ -1,0 +1,12 @@
+{application, carrot,
+ [
+  {description, "bunny eats a lot of carrots"},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { carrot_app, []}},
+  {env, []}
+ ]}.
