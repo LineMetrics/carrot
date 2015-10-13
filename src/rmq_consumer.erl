@@ -219,6 +219,7 @@ setup(Channel, Config) ->
 
    %% declare and bind queue to exchange
    QDeclare = to_queue_declare(QConfig),
+
    #'queue.declare_ok'{queue = QName} = amqp_channel:call(Channel, QDeclare),
    QBind = to_queue_bind(QConfig),
    #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind),
@@ -313,8 +314,15 @@ qx_name(Prefix) ->
 -spec to_exchange_declare([{atom(), term()}]) -> #'exchange.declare'{}.
 to_exchange_declare(Props) ->
    %% This is a safety in case certain arguments aren't set elsewhere
+   NFields =
+      case proplists:get_value(name_postfix, Props) of
+         true  -> [exchange, destination];
+         _B    -> []
+      end,
+   Props1 = expand_names(NFields, Props),
+
    Defaults = [ {ticket,0}, {arguments,[]} ],
-   Enriched = lists:merge(Props, Defaults),
+   Enriched = lists:merge(Props1, Defaults),
    list_to_tuple(['exchange.declare'|[proplists:get_value(X,Enriched,false) ||
       X <- record_info(fields,'exchange.declare')]]).
 
@@ -322,19 +330,50 @@ to_exchange_declare(Props) ->
 -spec to_queue_declare([{atom(), term()}]) -> #'queue.declare'{}.
 to_queue_declare(Props) ->
    %% This is a safety in case certain arguments aren't set elsewhere
+   NFields =
+      case proplists:get_value(name_postfix, Props) of
+         true  -> [queue];
+         _B    -> []
+      end,
+
+   Props1 = expand_names(NFields, Props),
+
    Defaults = [ {ticket,0}, {arguments,[]} ],
-   Enriched = lists:merge(Props, Defaults),
+   Enriched = lists:merge(Props1, Defaults),
    list_to_tuple(['queue.declare'|[proplists:get_value(X,Enriched,false) ||
       X <- record_info(fields,'queue.declare')]]).
 
 to_exchange_bind(Props) ->
    Defaults = [ {ticket,0}, {arguments,[]} ],
-   Enriched = lists:merge(Props, Defaults),
+   NFields0 =
+      case proplists:get_value(name_postfix, Props) of
+         true  -> [exchange, destination];
+         _B    -> []
+      end,
+   Props1 = expand_names(NFields0, Props),
+   Enriched = lists:merge(Props1, Defaults),
    list_to_tuple(['exchange.bind'|[proplists:get_value(X,Enriched,false) ||
       X <- record_info(fields,'exchange.bind')]]).
 
 to_queue_bind(Props) ->
    Defaults = [ {ticket,0}, {arguments,[]} ],
-   Enriched = lists:merge(Props, Defaults),
+   NFields =
+      case proplists:get_value(xname_postfix, Props) of
+         true  -> [queue, exchange];
+         _F    -> []
+      end,
+   Props1 = expand_names(NFields, Props),
+   Enriched = lists:merge(Props1, Defaults),
    list_to_tuple(['queue.bind'|[proplists:get_value(X,Enriched,false) ||
       X <- record_info(fields,'queue.bind')]]).
+
+
+
+expand_names([], Props) ->
+   Props;
+expand_names([Field | R], Props) ->
+%%    lager:debug("Expand name : ~p " ,[Field]),
+   Val0 = proplists:get_value(Field, Props),
+   Props1 = lists:keystore(Field, 1, Props, {Field, qx_name(Val0)}),
+%%    lager:debug("Props before expanding: ~p ~n after expanding: ~p~n",[Props, Props1]),
+   expand_names(R, Props1).
