@@ -5,8 +5,8 @@
 %%% @doc MQ consuming - worker.
 %%%
 %%% rmq_consumer is a behaviour for servers to consume from rabbitMQ
-%%% combined with a config for setting up a queue, to consume from and maybe an exchange which can be
-%%% bound to an existing exchange, a callback module must be implemented with the function(s) defined in the
+%%% combined with a config for setting up a queue, to consume from (and maybe an exchange, which can be
+%%% bound to an existing exchange), a callback module must be implemented with the function(s) defined in the
 %%% -callback() clause
 %%%
 %%% example config :
@@ -36,13 +36,10 @@
 %% {user, "youruser"},
 %% {pass, "yourpass"},
 %% {vhost, "/"},
-%% {confirm_timeout, 1000},
 %% {reconnect_timeout, 5000},
 %% {ssl_options, none} % Optional. Can be 'none' or [ssl_option()]
 %% ]}
 %%%
-%%% in your supervisor, you would start this consumer setup with : rmq_consumer:child_spec(YourAppName, mq_worker) ->
-%%% this gives you a list of child-specs for a supervisor with 2 workers
 %%%
 %%%
 %%% @end
@@ -74,6 +71,7 @@
    callback :: atom(),
    available = false:: boolean()
 }).
+
 -type state():: #state{}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -89,27 +87,16 @@
 -export([
    init/1, terminate/2, code_change/3,
    handle_call/3, handle_cast/2, handle_info/2
-   , start_link/2, child_spec/1]).
+   , start_link/2]).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%% BEHAVIOUR DEFINITION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%
 %%% handle a newly arrived amqp message
 %%%
+
 -callback process(Event :: { #'basic.deliver'{}, #'amqp_msg'{} }) ->
    ok | {error, Reason :: term()}.
-
-
-%%%%%%%%%% CHILD SPEC %%%%%%%%%%%%%%%%%%%%%
-child_spec(Config) ->
-   lager:alert("~nConfig for carrot: ~p~n",[Config]),
-   Workers = proplists:get_value(workers, Config),
-   Callback = proplists:get_value(callback, Config),
-
-   [{atom_to_list(Callback)++integer_to_list(Number),
-      {?MODULE, start_link, [Callback, Config]},
-      permanent, 5000, worker, dynamic
-   } || Number <- lists:seq(1, Workers)].
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Public API.
@@ -205,12 +192,15 @@ code_change(_OldVsn, State, _Extra) ->
 setup(Channel, Config) ->
 %%    lager:alert("Config for ~p : ~p",[?MODULE, Config]),
    Setup = proplists:get_value(setup, Config),
+   Type = proplists:get_value(setup_type, Config),
    case proplists:get_value(exchange, Setup) of
-      undefined -> ok;
-      XCreateConfig ->  %% declare and bind exchange to exchange
-         XDeclare = to_exchange_declare(XCreateConfig),
+      undefined -> ok; %% if there is no xchange defined, just declare the mandatory queue
+
+      XCreateConfig ->  %% declare and bind exchange to exchange1
+         XDeclare = carrot_amqp:to_exchange_declare(XCreateConfig, Type),
+%%          lager:info("~nXDeclare: ~p~n",[XDeclare]),
          #'exchange.declare_ok'{} = amqp_channel:call(Channel, XDeclare),
-         XBind = to_exchange_bind(XCreateConfig),
+         XBind = carrot_amqp:to_exchange_bind(XCreateConfig, Type),
          #'exchange.bind_ok'{} = amqp_channel:call(Channel, XBind)
 
    end,
@@ -218,12 +208,16 @@ setup(Channel, Config) ->
    QConfig = proplists:get_value(queue, Setup),
 
    %% declare and bind queue to exchange
-   QDeclare = to_queue_declare(QConfig),
+   QDeclare = carrot_amqp:to_queue_declare(QConfig, Type),
 
    #'queue.declare_ok'{queue = QName} = amqp_channel:call(Channel, QDeclare),
-   QBind = to_queue_bind(QConfig),
-   #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind),
 
+   case proplists:get_value(exchange, QConfig) of
+      undefined   -> ok;
+      _E          ->
+         QBind = carrot_amqp:to_queue_bind(QConfig, Type, proplists:get_value(xname_postfix, QConfig, false)),
+         #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind)
+   end,
    consume_queue(Channel, QName).
 
 consume_queue(Channel, Q) ->
@@ -303,77 +297,3 @@ configure_channel({ok, Channel}) ->
 configure_channel(Error) ->
    Error.
 
-
--spec qx_name(binary()) -> binary().
-qx_name(Prefix) ->
-   NodeBinary = list_to_binary(atom_to_list(node())),
-   Node = binary:replace(NodeBinary, <<"@">>, <<"_">>),
-   <<Prefix/binary, <<"_">>/binary, Node/binary>>.
-
-%% Converts a tuple list of values to a queue.declare record
--spec to_exchange_declare([{atom(), term()}]) -> #'exchange.declare'{}.
-to_exchange_declare(Props) ->
-   %% This is a safety in case certain arguments aren't set elsewhere
-   NFields =
-      case proplists:get_value(name_postfix, Props) of
-         true  -> [exchange, destination];
-         _B    -> []
-      end,
-   Props1 = expand_names(NFields, Props),
-
-   Defaults = [ {ticket,0}, {arguments,[]} ],
-   Enriched = lists:merge(Props1, Defaults),
-   list_to_tuple(['exchange.declare'|[proplists:get_value(X,Enriched,false) ||
-      X <- record_info(fields,'exchange.declare')]]).
-
-%% Converts a tuple list of values to a queue.declare record
--spec to_queue_declare([{atom(), term()}]) -> #'queue.declare'{}.
-to_queue_declare(Props) ->
-   %% This is a safety in case certain arguments aren't set elsewhere
-   NFields =
-      case proplists:get_value(name_postfix, Props) of
-         true  -> [queue];
-         _B    -> []
-      end,
-
-   Props1 = expand_names(NFields, Props),
-
-   Defaults = [ {ticket,0}, {arguments,[]} ],
-   Enriched = lists:merge(Props1, Defaults),
-   list_to_tuple(['queue.declare'|[proplists:get_value(X,Enriched,false) ||
-      X <- record_info(fields,'queue.declare')]]).
-
-to_exchange_bind(Props) ->
-   Defaults = [ {ticket,0}, {arguments,[]} ],
-   NFields0 =
-      case proplists:get_value(name_postfix, Props) of
-         true  -> [exchange, destination];
-         _B    -> []
-      end,
-   Props1 = expand_names(NFields0, Props),
-   Enriched = lists:merge(Props1, Defaults),
-   list_to_tuple(['exchange.bind'|[proplists:get_value(X,Enriched,false) ||
-      X <- record_info(fields,'exchange.bind')]]).
-
-to_queue_bind(Props) ->
-   Defaults = [ {ticket,0}, {arguments,[]} ],
-   NFields =
-      case proplists:get_value(xname_postfix, Props) of
-         true  -> [queue, exchange];
-         _F    -> []
-      end,
-   Props1 = expand_names(NFields, Props),
-   Enriched = lists:merge(Props1, Defaults),
-   list_to_tuple(['queue.bind'|[proplists:get_value(X,Enriched,false) ||
-      X <- record_info(fields,'queue.bind')]]).
-
-
-
-expand_names([], Props) ->
-   Props;
-expand_names([Field | R], Props) ->
-%%    lager:debug("Expand name : ~p " ,[Field]),
-   Val0 = proplists:get_value(Field, Props),
-   Props1 = lists:keystore(Field, 1, Props, {Field, qx_name(Val0)}),
-%%    lager:debug("Props before expanding: ~p ~n after expanding: ~p~n",[Props, Props1]),
-   expand_names(R, Props1).

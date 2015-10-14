@@ -35,7 +35,6 @@ init([]) ->
 %% Supervisor Definition for rmq_consumer workers
 rmq_sup(SetupName, Config) ->
    WorkerConf = proplists:get_value(SetupName, Config),
-   lager:alert("build child config for supervisor: ~p",[SetupName]),
    {SetupName,
       {rmq_consumer_sup, start_link, [SetupName, WorkerConf]},
       permanent, brutal_kill, supervisor, [rmq_consumer_sup]

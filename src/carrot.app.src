@@ -5,7 +5,10 @@
   {registered, []},
   {applications, [
                   kernel,
-                  stdlib
+                  stdlib,
+                  crypto,
+                  rabbit_common,
+                  amqp_client
                  ]},
   {mod, { carrot_app, []}},
   {env, []}

@@ -2,12 +2,10 @@
 -module(carrot).
 -author("Alexander Minichmair").
 
+
 %% API
 -export([start/0]).
 
 
 start() ->
-   ok = application:start(crypto),
-   ok = application:start(rabbit_common),
-   ok = application:start(amqp_client),
-   ok = application:start(carrot).
+   application:ensure_all_started(?MODULE, permanent).

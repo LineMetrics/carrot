@@ -25,7 +25,18 @@ start_link(Name, Config) ->
 %% ===================================================================
 
 init([Config]) ->
-   RmqWorkers = rmq_consumer:child_spec(Config),
+   RmqWorkers = child_specs(Config),
    {ok, { {one_for_one, 5, 10}, RmqWorkers} }.
+
+
+%%%%%%%%%% CHILD SPECs %%%%%%%%%%%%%%%%%%%%%
+child_specs(Config) ->
+   Workers = proplists:get_value(workers, Config),
+   Callback = proplists:get_value(callback, Config),
+
+   [{atom_to_list(Callback)++integer_to_list(Number),
+      {rmq_consumer, start_link, [Callback, Config]},
+      permanent, 5000, worker, dynamic
+   } || Number <- lists:seq(1, Workers)].
 
 
