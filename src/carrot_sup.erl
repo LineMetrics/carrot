@@ -24,17 +24,22 @@ start_link() ->
 
 init([]) ->
    {ok, Config} = application:get_env(carrot, bunnies),
+   {ok, HostParams} = application:get_env(carrot, broker),
 
    SetupNames = proplists:get_keys(Config),
 
-   Children = [rmq_sup(Name, Config) || Name <- SetupNames],
+   Children = [rmq_sup(Name, Config, HostParams) || Name <- SetupNames],
 
    {ok, { {one_for_one, 5, 10}, Children} }.
 
 
 %% Supervisor Definition for rmq_consumer workers
-rmq_sup(SetupName, Config) ->
-   WorkerConf = proplists:get_value(SetupName, Config),
+rmq_sup(SetupName, Config, HostParams) ->
+   WorkerConf0 = proplists:get_value(SetupName, Config),
+%%    lager:alert("Worker-Conf0 :~p",[WorkerConf0]),
+   %% inject host-params to worker-config
+   WorkerConf = carrot_util:proplists_merge(WorkerConf0, HostParams),
+%%    lager:alert("Worker-Conf :~p",[WorkerConf]),
    {SetupName,
       {rmq_consumer_sup, start_link, [SetupName, WorkerConf]},
       permanent, brutal_kill, supervisor, [rmq_consumer_sup]

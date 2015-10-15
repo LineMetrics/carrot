@@ -190,7 +190,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 setup(Channel, Config) ->
-%%    lager:alert("Config for ~p : ~p",[?MODULE, Config]),
+
    Setup = proplists:get_value(setup, Config),
    Type = proplists:get_value(setup_type, Config),
    case proplists:get_value(exchange, Setup) of
@@ -198,11 +198,11 @@ setup(Channel, Config) ->
 
       XCreateConfig ->  %% declare and bind exchange to exchange1
          XDeclare = carrot_amqp:to_exchange_declare(XCreateConfig, Type),
-%%          lager:info("~nXDeclare: ~p~n",[XDeclare]),
          #'exchange.declare_ok'{} = amqp_channel:call(Channel, XDeclare),
+         lager:info("#setup Xchange: ~p",["xchange declared ok"]),
          XBind = carrot_amqp:to_exchange_bind(XCreateConfig, Type),
-         #'exchange.bind_ok'{} = amqp_channel:call(Channel, XBind)
-
+         #'exchange.bind_ok'{} = amqp_channel:call(Channel, XBind),
+         lager:info("#setup Xchange: ~p",["xchange bind ok"])
    end,
 
    QConfig = proplists:get_value(queue, Setup),
@@ -211,19 +211,20 @@ setup(Channel, Config) ->
    QDeclare = carrot_amqp:to_queue_declare(QConfig, Type),
 
    #'queue.declare_ok'{queue = QName} = amqp_channel:call(Channel, QDeclare),
-
+   lager:info("#setup Queue: ~p ~n ~p",["queue declared ok", QDeclare]),
    case proplists:get_value(exchange, QConfig) of
       undefined   -> ok;
       _E          ->
-         QBind = carrot_amqp:to_queue_bind(QConfig, Type, proplists:get_value(xname_postfix, QConfig, false)),
-         #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind)
+         QBind = carrot_amqp:to_queue_bind(QConfig, Type),
+         #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind),
+         lager:info("#setup Queue: ~p ~n ~n ~p",["queue bind ok", QBind])
    end,
    consume_queue(Channel, QName).
 
 consume_queue(Channel, Q) ->
    #'basic.consume_ok'{consumer_tag = Tag} =
       amqp_channel:subscribe(Channel, #'basic.consume'{queue = Q}, self()),
-   lager:debug("subsribed to queue : ~p got back tag: ~p~n",[Q, Tag]).
+   lager:info("#setup subscribed to queue : ~p got back tag: ~p~n",[Q, Tag]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
