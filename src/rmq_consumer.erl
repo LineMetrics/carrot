@@ -148,17 +148,15 @@ handle_info(Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
    #'amqp_msg'{payload = _Msg, props = #'P_basic'{headers = _Headers}}},
     #state{callback = Callback}=State)    ->
 
-%%    lager:alert("Rabbit-Consumer-Worker [~p] got message delivered with"
-%%    ++" Routing-Key:~p and Message: ~p~n Headers are: ~p",[self(), RKey, Msg, Headers]),
-   %% ack msg
-   M = #'basic.ack'{delivery_tag = DTag},
-   amqp_channel:call(State#state.channel, M),
-
-   case Callback:process(Event) of
-      ok                   -> {noreply, State};
-      {error, _Error}      -> lager:error("Error when processing queue-message: ~p",[_Error]),
-         {noreply, State}
-   end
+   RMessage =
+      case Callback:process(Event) of
+         ok                   -> %lager:info("OK processing queue-message: ~p",[Event]),
+            #'basic.ack'{delivery_tag = DTag};
+         {error, _Error}      -> lager:error("Error when processing queue-message: ~p",[_Error]),
+            #'basic.nack'{delivery_tag = DTag, requeue = true}
+      end,
+   amqp_channel:call(State#state.channel, RMessage),
+   {noreply, State}
 ;
 handle_info({'basic.consume_ok', Tag}, State) ->
    lager:debug("got handle_info basic.consume_ok for Tag: ~p",[Tag]),
