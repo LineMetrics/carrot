@@ -70,7 +70,7 @@
 -callback init() -> {ok, ProcessorState :: term()} | {error, Reason :: term()}.
 
 -callback process(Event :: { #'basic.deliver'{}, #'amqp_msg'{} }, ProcessorState :: term()) ->
-   {ok, NewProcessorState} | {ok, noreply, NewProcessorState} | {error, Reason :: term(), NewProcessorState}.
+   {ok, NewProcessorState} | {ok, noack, NewProcessorState} | {error, Reason :: term(), NewProcessorState}.
 
 -callback terminate(TReason :: term(), ProcessorState :: term()) ->
    ok | {error, Reason :: term()}.
@@ -135,7 +135,7 @@ handle_info(Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
 
       {error, _Error, NewState}     -> lager:error("Error when processing queue-message: ~p",[_Error]),
          amqp_channel:call(State#state.channel,
-            #'basic.nack'{delivery_tag = DTag, requeue = true}),
+            #'basic.nack'{delivery_tag = DTag, requeue = true, multiple = false}),
          NewState
 
    end,
