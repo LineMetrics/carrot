@@ -130,7 +130,7 @@ handle_info(Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
       {ok, NewState}                -> %lager:info("OK processing queue-message: ~p",[Event]),
          amqp_channel:call(State#state.channel, #'basic.ack'{delivery_tag = DTag}), NewState;
 
-      {ok, noreply, NewState}       ->
+      {ok, noack, NewState}       ->
          NewState;
 
       {error, _Error, NewState}     -> lager:error("Error when processing queue-message: ~p",[_Error]),
