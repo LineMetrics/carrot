@@ -69,6 +69,7 @@
    spawned_tasks = []:: [{pid(), reference()}],
    config = []:: proplists:proplist(),
    callback :: atom(),
+   callback_state :: term(),
    available = false:: boolean()
 }).
 
@@ -95,7 +96,12 @@
 %%% handle a newly arrived amqp message
 %%%
 
--callback process(Event :: { #'basic.deliver'{}, #'amqp_msg'{} }) ->
+-callback init() -> {ok, ProcessorState :: term()} | {error, Reason :: term()}.
+
+-callback process(Event :: { #'basic.deliver'{}, #'amqp_msg'{} }, ProcessorState :: term()) ->
+   {ok, NewProcessorState} | {ok, noreply, NewProcessorState} | {error, Reason :: term(), NewProcessorState}.
+
+-callback terminate(TReason :: term(), ProcessorState :: term()) ->
    ok | {error, Reason :: term()}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -108,9 +114,9 @@ start_link(Callback, Config) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -spec init(proplists:proplist()) -> {ok, state()}.
 init([Callback, Config]) ->
-
+   {ok, CallbackState} = Callback:init(),
    erlang:send_after(0, self(), connect),
-   {ok, #state{config = Config, callback = Callback}}.
+   {ok, #state{config = Config, callback = Callback, callback_state = CallbackState}}.
 
 -spec handle_cast(term(), state()) -> {noreply, state()}.
 handle_cast(Msg, State) ->
@@ -146,20 +152,36 @@ handle_info(
 %% @doc handle incoming messages from rmq
 handle_info(Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
    #'amqp_msg'{payload = _Msg, props = #'P_basic'{headers = _Headers}}},
-    #state{callback = Callback}=State)    ->
+    #state{callback = Callback, callback_state = CState} = State)    ->
 
-   RMessage =
-      case Callback:process(Event) of
-         ok                   -> %lager:info("OK processing queue-message: ~p",[Event]),
-            #'basic.ack'{delivery_tag = DTag};
-         {error, _Error}      -> lager:error("Error when processing queue-message: ~p",[_Error]),
-            #'basic.nack'{delivery_tag = DTag, requeue = true}
-      end,
-   amqp_channel:call(State#state.channel, RMessage),
-   {noreply, State}
+   NewCallbackState =
+   case Callback:process(Event, CState) of
+      {ok, NewState}                -> %lager:info("OK processing queue-message: ~p",[Event]),
+         amqp_channel:call(State#state.channel, #'basic.ack'{delivery_tag = DTag}), NewState;
+
+      {ok, noreply, NewState}       ->
+         NewState;
+
+      {error, _Error, NewState}     -> lager:error("Error when processing queue-message: ~p",[_Error]),
+         amqp_channel:call(State#state.channel,
+            #'basic.nack'{delivery_tag = DTag, requeue = true}),
+         NewState
+
+   end,
+   {noreply, State#state{callback_state = NewCallbackState}}
 ;
 handle_info({'basic.consume_ok', Tag}, State) ->
    lager:debug("got handle_info basic.consume_ok for Tag: ~p",[Tag]),
+   {noreply, State}
+;
+handle_info({ack, Tag}, State) ->
+   amqp_channel:call(State#state.channel, #'basic.ack'{delivery_tag = Tag, multiple = false}),
+   lager:debug("acked single Tag: ~p",[Tag]),
+   {noreply, State}
+;
+handle_info({ack, multiple, Tag}, State) ->
+   amqp_channel:call(State#state.channel, #'basic.ack'{delivery_tag = Tag, multiple = true}),
+   lager:debug("acked multiple till Tag: ~p",[Tag]),
    {noreply, State}
 ;
 handle_info(Msg, State) ->

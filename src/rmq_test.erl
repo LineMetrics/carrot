@@ -6,11 +6,18 @@
 
 -include("../include/amqp_client.hrl").
 %% API
--export([process/1]).
+-export([process/2, init/0, terminate/2]).
 
+-record(state, {}).
+
+init() ->
+   {ok, #state{}}.
 
 process( {Event = #'basic.deliver'{delivery_tag = _DTag, routing_key = _RKey},
-         Msg = #'amqp_msg'{payload = _Msg, props = #'P_basic'{headers = _Headers}}}) ->
+         Msg = #'amqp_msg'{payload = _Msg, props = #'P_basic'{headers = _Headers}}} , #state{} = State) ->
 
    lager:debug("~p got message to PROCESS ::: ~p ~n ~p",[?MODULE, Event, Msg]),
+   {ok, State}.
+
+terminate(_Reason, _State) ->
    ok.
