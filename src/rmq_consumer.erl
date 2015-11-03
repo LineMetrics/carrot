@@ -4,41 +4,12 @@
 %%%
 %%% @doc MQ consuming - worker.
 %%%
+%%% every worker holds his own connection and amqp-channel
+%%%
 %%% rmq_consumer is a behaviour for servers to consume from rabbitMQ
 %%% combined with a config for setting up a queue, to consume from (and maybe an exchange, which can be
 %%% bound to an existing exchange), a callback module must be implemented with the function(s) defined in the
 %%% -callback() clause
-%%%
-%%% example config :
-%%%
-%% {mq_worker, [
-%% {callback, rmq_test},
-%% {setup,
-%% [
-%% {exchange, [
-%% {exchange, <<"x_gen_consumer_test1">>}, {destination, <<"x_gen_consumer_test1">>},
-%% {type, <<"topic">>},
-%% {source, <<"x_ds_fanout">>}, {routing_key, <<"some.key">>},
-%% {durable, false}, {auto_delete, true},
-%% {arguments, []}
-%% ]
-%% },
-%% {queue, [
-%% {queue, <<"q_gen_consumer_test1">>},
-%% {exchange, <<"x_gen_consumer_test1">>},
-%% {durable, false}, {auto_delete, true},
-%% {routing_key, <<"some.routing.key">>}, {arguments,[]}
-%% ]}
-%% ]
-%% },
-%% {workers, 2}, % Number of connections/consumers/channels,
-%% {hosts, [ {"127.0.0.1",5672} ]},
-%% {user, "youruser"},
-%% {pass, "yourpass"},
-%% {vhost, "/"},
-%% {reconnect_timeout, 5000},
-%% {ssl_options, none} % Optional. Can be 'none' or [ssl_option()]
-%% ]}
 %%%
 %%%
 %%%
@@ -182,6 +153,16 @@ handle_info({ack, Tag}, State) ->
 handle_info({ack, multiple, Tag}, State) ->
    amqp_channel:call(State#state.channel, #'basic.ack'{delivery_tag = Tag, multiple = true}),
    lager:debug("acked multiple till Tag: ~p",[Tag]),
+   {noreply, State}
+;
+handle_info({nack, Tag}, State) ->
+   amqp_channel:call(State#state.channel, #'basic.nack'{delivery_tag = Tag, multiple = false, requeue = true}),
+   lager:debug("nacked single Tag: ~p",[Tag]),
+   {noreply, State}
+;
+handle_info({nack, multiple, Tag}, State) ->
+   amqp_channel:call(State#state.channel, #'basic.nack'{delivery_tag = Tag, multiple = true, requeue = true}),
+   lager:debug("nacked multiple till Tag: ~p",[Tag]),
    {noreply, State}
 ;
 handle_info(Msg, State) ->
