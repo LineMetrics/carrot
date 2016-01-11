@@ -145,6 +145,10 @@ handle_info({'basic.consume_ok', Tag}, State) ->
    lager:debug("got handle_info basic.consume_ok for Tag: ~p",[Tag]),
    {noreply, State}
 ;
+handle_info({'basic.qos_ok', {}}, State) ->
+   lager:debug("got handle_info basic.qos_ok for Channel: ~p",[State#state.channel]),
+   {noreply, State}
+;
 handle_info({ack, Tag}, State) ->
    amqp_channel:call(State#state.channel, #'basic.ack'{delivery_tag = Tag, multiple = false}),
    lager:debug("acked single Tag: ~p",[Tag]),
@@ -220,11 +224,19 @@ setup(Channel, Config) ->
          #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind),
          lager:info("#setup Queue: ~p ~n ~n ~p",["queue bind ok", QBind])
    end,
-   consume_queue(Channel, QName).
+   consume_queue(Channel, QName, proplists:get_value(prefetch_count, Config, 0)).
 
-consume_queue(Channel, Q) ->
+consume_queue(Channel, Q, Prefetch) ->
+   %% set prefetch count if any
+   case Prefetch > 0 of
+      false   ->
+         ok;
+      true      ->
+         #'basic.qos_ok'{} = amqp_channel:call(Channel, #'basic.qos'{prefetch_count = Prefetch})
+   end,
+   %% actually consume from q
    #'basic.consume_ok'{consumer_tag = Tag} =
-      amqp_channel:subscribe(Channel, #'basic.consume'{queue = Q}, self()),
+         amqp_channel:subscribe(Channel, #'basic.consume'{queue = Q}, self()),
    lager:info("#setup subscribed to queue : ~p got back tag: ~p~n",[Q, Tag]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -281,6 +293,7 @@ connect(Config) ->
       virtual_host = Get({s, vhost}),
       port = Port,
       host = Host,
+      heartbeat = GetWithDefault(heartbeat, 80),
       ssl_options = GetWithDefault(ssl_options, none)
    })).
 
