@@ -232,6 +232,7 @@ consume_queue(Channel, Q, Prefetch) ->
       false   ->
          ok;
       true      ->
+         lager:info("Set Prefetch-Count for Channel: ~p",[Prefetch]),
          #'basic.qos_ok'{} = amqp_channel:call(Channel, #'basic.qos'{prefetch_count = Prefetch})
    end,
    %% actually consume from q
