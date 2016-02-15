@@ -59,7 +59,7 @@
 -export([
    init/1, terminate/2, code_change/3,
    handle_call/3, handle_cast/2, handle_info/2
-   , start_link/2]).
+   , start_link/2, kill_channel/1]).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%% BEHAVIOUR DEFINITION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -78,6 +78,9 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Public API.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+kill_channel(Server) ->
+   gen_server:call(Server, kill).
+
 start_link(Callback, Config) ->
    gen_server:start_link(?MODULE, [Callback, Config], []).
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -85,8 +88,11 @@ start_link(Callback, Config) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -spec init(proplists:proplist()) -> {ok, state()}.
 init([Callback, Config]) ->
+%%    lager:notice("Starting rmq_consumer ..."),
+   process_flag(trap_exit, true),
    {ok, CallbackState} = Callback:init(),
    erlang:send_after(0, self(), connect),
+%%    erlang:send_after(3000, self(), kill),
    {ok, #state{config = Config, callback = Callback, callback_state = CallbackState}}.
 
 -spec handle_cast(term(), state()) -> {noreply, state()}.
@@ -96,7 +102,7 @@ handle_cast(Msg, State) ->
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
 handle_info(connect, State) ->
-   {Available, Channel, ChannelRef} = check_for_channel(State),
+   {Available, Channel} = check_for_channel(State),
 
    case Available of
       true  -> setup(Channel, State#state.config);
@@ -104,15 +110,34 @@ handle_info(connect, State) ->
    end,
    {noreply, State#state{
       channel = Channel,
-      channel_ref = ChannelRef,
       available = Available
    }};
 
+handle_info(kill, State=#state{channel = Channel}) ->
+   lager:notice("kill the channel"),
+%%    exit(Channel, aus),
+%%    R = amqp_channel:close(Channel),
+%%    lager:info("closing channel gives: ~p",[R]),
+   {stop, die, State};
+
 handle_info(
-    {'DOWN', MQRef, process, MQPid, Reason},
-    State=#state{channel = MQPid, channel_ref = MQRef}
+    {'DOWN', _MQRef, process, MQPid, Reason},
+    _State=#state{channel = _MQPid}
 ) ->
-   lager:warning("MQ channel is down: ~p", [Reason]),
+   lager:alert("MQ channel is DOWN: ~p", [Reason]);
+%%    ,
+%%    erlang:send_after(0, self(), connect),
+%%    {noreply, State#state{
+%%       channel = undefined,
+%%       channel_ref = undefined,
+%%       available = false
+%%    }};
+
+
+handle_info(
+    {'EXIT', MQPid, Reason}, State=#state{channel = MQPid}
+) ->
+   lager:alert("MQ channel DIED: ~p", [Reason]),
    erlang:send_after(0, self(), connect),
    {noreply, State#state{
       channel = undefined,
@@ -173,7 +198,10 @@ handle_info(Msg, State) ->
    lager:error("Unhandled msg in rabbitmq_consumer : ~p", [Msg]),
    {noreply, State}.
 
-
+handle_call(kill, _From, State=#state{channel = Channel}) ->
+   lager:error("kill the channel"),
+   amqp_channel:close(Channel),
+   {reply, ok, State};
 handle_call(Req, _From, State) ->
    lager:error("Invalid request: ~p", [Req]),
    {reply, invalid_request, State}.
@@ -193,7 +221,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% MQ setup and connection functions.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+%% setup exchange, queue, bind exchange queue, setup prefetch and consume from the queue
 setup(Channel, Config) ->
 
    Setup = proplists:get_value(setup, Config),
@@ -243,7 +271,6 @@ consume_queue(Channel, Q, Prefetch) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
 check_for_channel(#state{} = State) ->
    Connect = fun() ->
       case connect(State#state.config) of
@@ -258,15 +285,9 @@ check_for_channel(#state{} = State) ->
                                         end;
                 _ -> Connect()
              end,
-   ChannelRef = case Channel of
-                   _ when is_pid(Channel) -> erlang:monitor(process, Channel);
-                   _ -> erlang:send_after(
-                      proplists:get_value(reconnect_timeout, State#state.config), self(), connect
-                   ),
-                      undefined
-                end,
-   Available = is_pid(Channel) andalso ChannelRef =/= undefined,
-   {Available, Channel, ChannelRef}.
+%%    lager:notice("new channelpid is ~p",[Channel]),
+   Available = is_pid(Channel),
+   {Available, Channel}.
 
 %%%
 %%% connect
@@ -299,12 +320,14 @@ connect(Config) ->
    })).
 
 new_channel({ok, Connection}) ->
+%%    link(Connection),
    configure_channel(amqp_connection:open_channel(Connection));
 
 new_channel(Error) ->
    Error.
 
 configure_channel({ok, Channel}) ->
+   link(Channel), %erlang:monitor(process, Channel),
    case amqp_channel:call(Channel, #'confirm.select'{}) of
       {'confirm.select_ok'} -> {ok, Channel};
       Error -> lager:warning("Could not configure channel: ~p", [Error]), Error
