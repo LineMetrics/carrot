@@ -35,6 +35,7 @@
 %%% Types.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -record(state, {
+   connection = undefined :: undefined|pid(),
    channel = undefined:: undefined|pid(),
    channel_ref = undefined:: undefined|reference(),
    spawned_tasks = []:: [{pid(), reference()}],
@@ -102,7 +103,7 @@ handle_cast(Msg, State) ->
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
 handle_info(connect, State) ->
-   {Available, Channel} = check_for_channel(State),
+   {Available, Channel, Conn} = check_for_channel(State),
 
    case Available of
       true  -> setup(Channel, State#state.config);
@@ -110,10 +111,11 @@ handle_info(connect, State) ->
    end,
    {noreply, State#state{
       channel = Channel,
-      available = Available
+      available = Available,
+      connection = Conn
    }};
 
-handle_info(kill, State=#state{channel = Channel}) ->
+handle_info(kill, State=#state{channel = _Channel}) ->
    lager:notice("kill the channel"),
 %%    exit(Channel, aus),
 %%    R = amqp_channel:close(Channel),
@@ -121,7 +123,7 @@ handle_info(kill, State=#state{channel = Channel}) ->
    {stop, die, State};
 
 handle_info(
-    {'DOWN', _MQRef, process, MQPid, Reason},
+    {'DOWN', _MQRef, process, _MQPid, Reason},
     _State=#state{channel = _MQPid}
 ) ->
    lager:alert("MQ channel is DOWN: ~p", [Reason]);
@@ -207,8 +209,16 @@ handle_call(Req, _From, State) ->
    {reply, invalid_request, State}.
 
 -spec terminate(atom(), state()) -> ok.
-terminate(_Reason, _State) ->
-   ok.
+terminate(Reason, #state{
+                        callback = Callback,
+                        callback_state = CBState,
+                        channel = Channel,
+                        connection = Conn}) ->
+
+%%    lager:notice("~p ~p terminating with reason: ~p",[?MODULE, self(), Reason]),
+   amqp_channel:close(Channel),
+   amqp_connection:close(Conn),
+   Callback:terminate(Reason, CBState).
 
 -spec code_change(string(), state(), term()) -> {ok, state()}.
 code_change(_OldVsn, State, _Extra) ->
@@ -274,20 +284,21 @@ consume_queue(Channel, Q, Prefetch) ->
 check_for_channel(#state{} = State) ->
    Connect = fun() ->
       case connect(State#state.config) of
-         {ok, Pid} -> Pid;
+         {{ok, Pid},{ok,Conn}} -> {Pid,Conn};
          Error -> lager:alert("MQ NOT available: ~p", [Error]), not_available
       end
    end,
-   Channel = case State#state.channel of
-                Pid when is_pid(Pid) -> case is_process_alive(Pid) of
-                                           true -> Pid;
+   {Channel, Conn} =
+      case State#state.channel of
+                {Pid,Conn0} when is_pid(Pid) -> case is_process_alive(Pid) of
+                                           true -> {Pid, Conn0};
                                            false -> Connect()
                                         end;
                 _ -> Connect()
              end,
 %%    lager:notice("new channelpid is ~p",[Channel]),
    Available = is_pid(Channel),
-   {Available, Channel}.
+   {Available, Channel, Conn}.
 
 %%%
 %%% connect
@@ -309,7 +320,7 @@ connect(Config) ->
    random:seed(A,B,C),
    Index = random:uniform(length(RabbbitHosts)),
    {Host, Port} = lists:nth(Index,RabbbitHosts),
-   new_channel(amqp_connection:start(#amqp_params_network{
+   Connection = amqp_connection:start(#amqp_params_network{
       username = Get({s, user}),
       password = Get({s, pass}),
       virtual_host = Get({s, vhost}),
@@ -317,7 +328,8 @@ connect(Config) ->
       host = Host,
       heartbeat = GetWithDefault(heartbeat, 80),
       ssl_options = GetWithDefault(ssl_options, none)
-   })).
+   }),
+   {new_channel(Connection), Connection}.
 
 new_channel({ok, Connection}) ->
 %%    link(Connection),

@@ -40,7 +40,7 @@ child_specs(Config) ->
 
 
 add_workers(Sup, Config) ->
-   lager:debug("add workers: ~p" ,[Config]),
+%%    lager:debug("add workers: ~p" ,[Config]),
    [supervisor:start_child(Sup, Spec) || Spec <- child_specs(Config)].
 terminate_workers(Sup, Config, From, To) ->
    Callback = proplists:get_value(callback, Config),

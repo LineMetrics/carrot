@@ -20,4 +20,5 @@ process( {Event = #'basic.deliver'{delivery_tag = _DTag, routing_key = _RKey},
    {ok, State}.
 
 terminate(_Reason, _State) ->
+   lager:debug("~p got terminate message with reason: ~p",[?MODULE, _Reason]),
    ok.
