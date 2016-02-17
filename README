@@ -1,1 +1,55 @@
-karotte
+# Carrot #
+
+Carrot is a small Erlang app that helps Erlang Systems to easly consume and work on messages from
+a rabitmq broker by providing a callback module that handles the incoming messages.
+
+All this is done via a simple proplist-config which is also updateable on the fly.
+
+# The Configuration #
+
+#+BEGIN_EXAMPLE
+
+    [
+
+      {carrot,
+        [
+           %% connection parameters
+           {broker, [
+              {hosts, [ {"192.168.9.125",5672} ]},
+              {user, "linemetrics"},
+              {pass, "line7metrics"},
+              {vhost, "/"},
+              {reconnect_timeout, 2000},
+              {ssl_options, none} % Optional. Can be 'none' or [ssl_option()]
+             ]},
+           %% consumer setups
+           {bunnies,
+              [
+                 %% cassandra topics
+                 {cass_worker_1005, [
+                    {workers, 3}, % Number of connections,
+                    {callback, rmq_test},
+                    {setup_type, temporary},
+                    {prefetch_count, 40},
+                    {setup,
+                       [
+                          {queue, [
+                             {queue, <<"qt_cass_1005">>},
+                             {exchange, <<"x_cass_topic">>}, {xname_postfix, false},
+                             {routing_key, <<"1005.#">>}
+                          ]}
+                       ]
+                    }
+
+
+                 ]}
+
+
+         ]} %% end bunnies
+
+      ]} %% end carrot
+
+
+    ]
+
+#+END_EXAMPLE
