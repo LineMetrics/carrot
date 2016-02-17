@@ -106,7 +106,7 @@ handle_info(connect, State) ->
    {Available, Channel, Conn} = check_for_channel(State),
 
    case Available of
-      true  -> setup(Channel, State#state.config);
+      true  -> carrot_amqp:setup(Channel, State#state.config);
       false -> nil
    end,
    {noreply, State#state{
@@ -229,55 +229,8 @@ code_change(_OldVsn, State, _Extra) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%% MQ setup and connection functions.
+%%% MQ connection functions.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%% setup exchange, queue, bind exchange queue, setup prefetch and consume from the queue
-setup(Channel, Config) ->
-
-   Setup = proplists:get_value(setup, Config),
-   Type = proplists:get_value(setup_type, Config),
-   case proplists:get_value(exchange, Setup) of
-      undefined -> ok; %% if there is no xchange defined, just declare the mandatory queue
-
-      XCreateConfig ->  %% declare and bind exchange to exchange1
-         XDeclare = carrot_amqp:to_exchange_declare(XCreateConfig, Type),
-         #'exchange.declare_ok'{} = amqp_channel:call(Channel, XDeclare),
-         lager:info("#setup Xchange: ~p",["xchange declared ok"]),
-         XBind = carrot_amqp:to_exchange_bind(XCreateConfig, Type),
-         #'exchange.bind_ok'{} = amqp_channel:call(Channel, XBind),
-         lager:info("#setup Xchange: ~p",["xchange bind ok"])
-   end,
-
-   QConfig = proplists:get_value(queue, Setup),
-
-   %% declare and bind queue to exchange
-   QDeclare = carrot_amqp:to_queue_declare(QConfig, Type),
-
-   #'queue.declare_ok'{queue = QName} = amqp_channel:call(Channel, QDeclare),
-   lager:info("#setup Queue: ~p ~n ~p",["queue declared ok", QDeclare]),
-   case proplists:get_value(exchange, QConfig) of
-      undefined   -> ok;
-      _E          ->
-         QBind = carrot_amqp:to_queue_bind(QConfig, Type),
-         #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind),
-         lager:info("#setup Queue: ~p ~n ~n ~p",["queue bind ok", QBind])
-   end,
-   consume_queue(Channel, QName, proplists:get_value(prefetch_count, Config, 0)).
-
-consume_queue(Channel, Q, Prefetch) ->
-   %% set prefetch count if any
-   case Prefetch > 0 of
-      false   ->
-         ok;
-      true      ->
-         lager:info("Set Prefetch-Count for Channel: ~p",[Prefetch]),
-         #'basic.qos_ok'{} = amqp_channel:call(Channel, #'basic.qos'{prefetch_count = Prefetch})
-   end,
-   %% actually consume from q
-   #'basic.consume_ok'{consumer_tag = Tag} =
-         amqp_channel:subscribe(Channel, #'basic.consume'{queue = Q}, self()),
-   lager:info("#setup subscribed to queue : ~p got back tag: ~p~n",[Q, Tag]).
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

@@ -46,6 +46,11 @@ rmq_sup(SetupName, Config, HostParams) ->
    }.
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% CONFIG-UPDATE
+%%%
+
+
 load_bunnies() ->
    load_bunnies("./sys.config").
 
@@ -67,18 +72,18 @@ load_bunnies(File) ->
             case OldNumWorkers > NewNumWorkers of
                true -> %% remove workers
                   rmq_consumer_sup:terminate_workers(SPid, WorkerConf, NewNumWorkers+1, OldNumWorkers),
-                  io:format("REMOVING ~p worker(s) from rmq_consumer_sup : '~p' <~p>~n",[OldNumWorkers-NewNumWorkers, SName, SPid]),
+                  io:format("REMOVING ~p worker(s) from : '~p' <~p>~n",[OldNumWorkers-NewNumWorkers, SName, SPid]),
                   ok;
                false -> %% start all workers
                   case OldNumWorkers == NewNumWorkers of
                      true  -> ok;
-                     false -> io:format("ADDING ~p worker(s) to rmq_consumer_sup '~p' <~p>~n",[NewNumWorkers-OldNumWorkers, SName, SPid]),
+                     false -> io:format("ADDING ~p worker(s) to : '~p' <~p>~n",[NewNumWorkers-OldNumWorkers, SName, SPid]),
                         rmq_consumer_sup:add_workers(SPid, WorkerConf)
                   end
             end;
          false -> %% no, start supervisor
             supervisor:start_child(?MODULE, Child),
-            io:format("STARTING new rmq_consumer_sup '~p'~n",[SName])
+            io:format("STARTING new '~p'~n",[SName])
       end
    end,
    lists:foreach(Check, Children),
@@ -88,7 +93,8 @@ load_bunnies(File) ->
       true -> %% stop all these supervisors
          DelFun = fun(SName) ->
             {value, {SName, Sup, _, _}, _A} = lists:keytake(SName, 1, OldChildren),
-            io:format("STOPPING rmq_consumer_sup: '~p' <~p>~n",[SName, Sup]),
+            OldNumWorkers = supervisor:count_children(Sup),
+            io:format("STOPPING : '~p' <~p> with ~p workers ~n",[SName, Sup, proplists:get_value(workers, OldNumWorkers)]),
             supervisor:terminate_child(?MODULE, SName), supervisor:delete_child(?MODULE, SName)
          end,
          lists:foreach(DelFun, ToRemove),
