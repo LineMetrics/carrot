@@ -7,7 +7,7 @@ All this is done via a simple proplist-config which is also updateable on the fl
 
 ## The Configuration
 
-#+BEGIN_EXAMPLE
+#
 
     [
 
@@ -52,4 +52,4 @@ All this is done via a simple proplist-config which is also updateable on the fl
 
     ]
 
-#+END_EXAMPLE
+#
