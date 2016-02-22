@@ -80,7 +80,7 @@
 
 %% this callback is optional for handling other info messages for the callback
 -callback handle_info(TEvent :: term(), ProcessorState :: term()) ->
-   {ok, NewProcessorState} | {error, Reason :: term()}.
+   {ok, NewProcessorState :: term()} | {error, Reason :: term()}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Public API.
