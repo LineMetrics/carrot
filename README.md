@@ -53,3 +53,27 @@ All this is done via a simple proplist-config which is also updateable on the fl
     ]
 
 #
+
+## Behaviour Callbacks
+
+Implement the rmq_consumer behaviour
+
+#
+
+    %%% init the callback
+    -callback init() -> {ok, ProcessorState :: term()} | {error, Reason :: term()}.
+
+    %%% handle a newly arrived amqp message
+    -callback process(Event :: { #'basic.deliver'{}, #'amqp_msg'{} }, ProcessorState :: term()) ->
+       {ok, NewProcessorState} | {ok, noack, NewProcessorState} | {error, Reason :: term(), NewProcessorState}.
+
+    %%% handle termination of the process
+    -callback terminate(TReason :: term(), ProcessorState :: term()) ->
+       ok | {error, Reason :: term()}.
+
+    %% this callback is optional for handling other messages
+    -callback handle_info(TEvent :: term(), ProcessorState :: term()) ->
+       {ok, NewProcessorState} | {error, Reason :: term()}.
+
+#
+
