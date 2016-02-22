@@ -5,6 +5,8 @@ a rabitmq broker by providing a callback module that handles the incoming messag
 
 All this is done via a simple proplist-config which is also updateable on the fly.
 
+Note: carrot is fairly new, so things may change
+
 ## The Configuration
 
 #
