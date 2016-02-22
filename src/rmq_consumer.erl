@@ -65,16 +65,22 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%% BEHAVIOUR DEFINITION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%
-%%% handle a newly arrived amqp message
 %%%
 
+%%% init the callback
 -callback init() -> {ok, ProcessorState :: term()} | {error, Reason :: term()}.
 
+%%% handle a newly arrived amqp message
 -callback process(Event :: { #'basic.deliver'{}, #'amqp_msg'{} }, ProcessorState :: term()) ->
    {ok, NewProcessorState} | {ok, noack, NewProcessorState} | {error, Reason :: term(), NewProcessorState}.
 
+%%% handle termination of the process
 -callback terminate(TReason :: term(), ProcessorState :: term()) ->
    ok | {error, Reason :: term()}.
+
+%% this callback is optional for handling other info messages for the callback
+-callback handle_info(TEvent :: term(), ProcessorState :: term()) ->
+   {ok, NewProcessorState} | {error, Reason :: term()}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Public API.
@@ -146,6 +152,16 @@ handle_info(
       channel_ref = undefined,
       available = false
    }};
+
+handle_info({'EXIT', _OtherPid, _Reason} = Event,
+               State=#state{callback = Callback, callback_state = CallbackState} ) ->
+   NewCallbackState =
+   case erlang:function_exported(Callback, handle_info, 2) of
+      true -> {ok, NewCBState} = Callback:handle_info(Event, CallbackState), NewCBState;
+      false -> lager:warning("Function 'handle_info' not exported in Callback-Module: ~p",[Callback]), CallbackState
+   end,
+
+   {noreply, State#state{callback_state = NewCallbackState}};
 
 %% @doc handle incoming messages from rmq
 handle_info(Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
