@@ -89,7 +89,6 @@ stop(Server) ->
    Server ! stop.
 
 start_link(Callback, Config) ->
-   lager:notice("Callback: ~p CONFIG : ~p",[Callback, Config]),
    gen_server:start_link(?MODULE, [Callback, Config], []).
 
 
