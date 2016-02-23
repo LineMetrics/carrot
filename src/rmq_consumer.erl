@@ -60,7 +60,7 @@
 -export([
    init/1, terminate/2, code_change/3,
    handle_call/3, handle_cast/2, handle_info/2
-   , start_link/2, kill_channel/1, start_monitor/2]).
+   , start_link/2, start_monitor/2, stop/1]).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%% BEHAVIOUR DEFINITION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -85,8 +85,8 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% Public API.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-kill_channel(Server) ->
-   gen_server:call(Server, kill).
+stop(Server) ->
+   gen_server:call(Server, stop).
 
 start_link(Callback, Config) ->
    lager:notice("Callback: ~p CONFIG : ~p",[Callback, Config]),
@@ -130,12 +130,9 @@ handle_info(connect, State) ->
       connection = Conn
    }};
 
-handle_info(kill, State=#state{channel = _Channel}) ->
-   lager:notice("kill the channel"),
-%%    exit(Channel, aus),
-%%    R = amqp_channel:close(Channel),
-%%    lager:info("closing channel gives: ~p",[R]),
-   {stop, die, State};
+handle_info(stop, State=#state{channel = _Channel}) ->
+   lager:notice("stopping rmq_consumer: ~p",[self()]),
+   {stop, shutdown, State};
 
 handle_info(
     {'DOWN', _MQRef, process, _MQPid, Reason},
@@ -231,10 +228,7 @@ handle_info(Msg, State) ->
    lager:error("Unhandled msg in rabbitmq_consumer : ~p", [Msg]),
    {noreply, State}.
 
-handle_call(kill, _From, State=#state{channel = Channel}) ->
-   lager:error("kill the channel"),
-   amqp_channel:close(Channel),
-   {reply, ok, State};
+
 handle_call(Req, _From, State) ->
    lager:error("Invalid request: ~p", [Req]),
    {reply, invalid_request, State}.
