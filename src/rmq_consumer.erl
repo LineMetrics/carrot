@@ -86,7 +86,7 @@
 %%% Public API.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 stop(Server) ->
-   gen_server:call(Server, stop).
+   Server ! stop.
 
 start_link(Callback, Config) ->
    lager:notice("Callback: ~p CONFIG : ~p",[Callback, Config]),
