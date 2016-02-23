@@ -133,23 +133,22 @@ handle_info(stop, State=#state{channel = _Channel}) ->
    lager:notice("stopping rmq_consumer: ~p",[self()]),
    {stop, shutdown, State};
 
-handle_info(
-    {'DOWN', _MQRef, process, _MQPid, Reason},
-    _State=#state{channel = _MQPid}
-) ->
-   lager:alert("MQ channel is DOWN: ~p", [Reason]);
-%%    ,
-%%    erlang:send_after(0, self(), connect),
-%%    {noreply, State#state{
-%%       channel = undefined,
-%%       channel_ref = undefined,
-%%       available = false
-%%    }};
+handle_info( {'DOWN', _Ref, process, _Pid, _Reason} = Req, State=#state{callback = Callback, callback_state = CBState}) ->
+%%   lager:alert("MQ channel is DOWN: ~p", [Reason]),
+   NewCallbackState =
+      case {is_pid(Callback), erlang:function_exported(Callback, handle_info, 2)} of
+         {false, true}  ->
+                     {ok, NewCBState} = Callback:handle_info(Req, CBState), NewCBState;
+         _Other         ->
+                     lager:info(
+                        "Function 'handle_info' not exported in Callback-Module: ~p or Callback is a process",
+                        [Callback]),
+                     CBState
+      end,
+   {noreply, State#state{callback_state = NewCallbackState}};
 
 
-handle_info(
-    {'EXIT', MQPid, Reason}, State=#state{channel = MQPid}
-) ->
+handle_info({'EXIT', MQPid, Reason}, State=#state{channel = MQPid} ) ->
    lager:alert("MQ channel DIED: ~p", [Reason]),
    erlang:send_after(0, self(), connect),
    {noreply, State#state{
