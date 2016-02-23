@@ -109,10 +109,10 @@ handle_cast(_Request, State) ->
 handle_info({'DOWN', _MonitorRef, process, Consumer, _Info}, #state{consumer = Consumer} = State) ->
    lager:notice("MQ-Consumer:~p is 'DOWN'",[Consumer]),
    {noreply, State#state{consumer = undefined}};
-handle_info(_Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
-   #'amqp_msg'{payload = Payload, props = #'P_basic'{headers = _Headers}}}, #state{consumer = Con}=State) ->
-   lager:debug("** got q-message: ~p",[Payload]),
-   carrot:ack(Con, DTag),
+handle_info({_Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
+   #'amqp_msg'{payload = Payload, props = #'P_basic'{headers = _Headers}}}, From}, #state{consumer = From}=State) ->
+   lager:debug("** got q-message: ~p from: ~p",[Payload, From]),
+   carrot:ack(From, DTag),
    {noreply, State}.
 
 %%--------------------------------------------------------------------
