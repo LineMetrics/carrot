@@ -60,7 +60,7 @@
 -export([
    init/1, terminate/2, code_change/3,
    handle_call/3, handle_cast/2, handle_info/2
-   , start_link/2, kill_channel/1]).
+   , start_link/2, kill_channel/1, start_monitor/2]).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%% BEHAVIOUR DEFINITION %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -89,22 +89,31 @@ kill_channel(Server) ->
    gen_server:call(Server, kill).
 
 start_link(Callback, Config) ->
+   lager:notice("Callback: ~p CONFIG : ~p",[Callback, Config]),
    gen_server:start_link(?MODULE, [Callback, Config], []).
+
+
+start_monitor(Callback, Config) ->
+   {ok, Pid} = gen_server:start(?MODULE, [Callback, Config], []),
+   erlang:monitor(process, Pid),
+   {ok, Pid}.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% gen_server API.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -spec init(proplists:proplist()) -> {ok, state()}.
 init([Callback, Config]) ->
-%%    lager:notice("Starting rmq_consumer ..."),
    process_flag(trap_exit, true),
-   {ok, CallbackState} = Callback:init(),
+   {Callback1, CBState} =
+   case is_pid(Callback) of
+      true  -> {Callback, undefined};
+      false -> {ok, CallbackState} = Callback:init(), {Callback, CallbackState}
+   end,
    erlang:send_after(0, self(), connect),
-%%    erlang:send_after(3000, self(), kill),
-   {ok, #state{config = Config, callback = Callback, callback_state = CallbackState}}.
+   {ok, #state{config = Config, callback = Callback1, callback_state = CBState}}.
 
 -spec handle_cast(term(), state()) -> {noreply, state()}.
 handle_cast(Msg, State) ->
-   lager:error("Invalid cast: ~p", [Msg]),
+   lager:warning("Invalid cast: ~p", [Msg]),
    {noreply, State}.
 
 -spec handle_info(term(), state()) -> {noreply, state()}.
@@ -158,11 +167,16 @@ handle_info({'EXIT', _OtherPid, _Reason} = Event,
    NewCallbackState =
    case erlang:function_exported(Callback, handle_info, 2) of
       true -> {ok, NewCBState} = Callback:handle_info(Event, CallbackState), NewCBState;
-      false -> lager:warning("Function 'handle_info' not exported in Callback-Module: ~p",[Callback]), CallbackState
+      false -> lager:info("Function 'handle_info' not exported in Callback-Module: ~p",[Callback]), CallbackState
    end,
 
    {noreply, State#state{callback_state = NewCallbackState}};
 
+handle_info(Event = {#'basic.deliver'{}, #'amqp_msg'{}},
+            #state{callback = Callback} = State)
+                           when is_pid(Callback) ->
+   Callback ! Event,
+   {noreply, State};
 %% @doc handle incoming messages from rmq
 handle_info(Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
    #'amqp_msg'{payload = _Msg, props = #'P_basic'{headers = _Headers}}},
@@ -234,7 +248,11 @@ terminate(Reason, #state{
 %%    lager:notice("~p ~p terminating with reason: ~p",[?MODULE, self(), Reason]),
    amqp_channel:close(Channel),
    amqp_connection:close(Conn),
-   Callback:terminate(Reason, CBState).
+   case is_pid(Callback) of
+      true -> ok;
+      false -> Callback:terminate(Reason, CBState)
+   end
+   .
 
 -spec code_change(string(), state(), term()) -> {ok, state()}.
 code_change(_OldVsn, State, _Extra) ->

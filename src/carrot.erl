@@ -20,11 +20,11 @@ load_bunnies() ->
 load_bunnies(File) ->
    carrot_sup:load_bunnies(File).
 
-ack(Channel, Tag) ->
-   Channel ! {ack, Tag}.
-ack_multiple(Channel, Tag) ->
-   Channel ! {ack, multiple, Tag}.
-nack(Channel, Tag) ->
-   Channel ! {nack, Tag}.
-nack_multiple(Channel, Tag) ->
-   Channel ! {nack, multiple, Tag}.
+ack(Consumer, Tag) ->
+   Consumer ! {ack, Tag}.
+ack_multiple(Consumer, Tag) ->
+   Consumer ! {ack, multiple, Tag}.
+nack(Consumer, Tag) ->
+   Consumer ! {nack, Tag}.
+nack_multiple(Consumer, Tag) ->
+   Consumer ! {nack, multiple, Tag}.

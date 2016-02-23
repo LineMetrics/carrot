@@ -11,7 +11,7 @@
 -record(state, {}).
 
 init() ->
-   rmq_test_server:start_link(),
+%%   rmq_test_server:start_link(),
    {ok, #state{}}.
 
 process( {Event = #'basic.deliver'{delivery_tag = _DTag, routing_key = _RKey},

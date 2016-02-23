@@ -7,6 +7,8 @@
 %% API
 -export([start_link/0]).
 
+-include("../include/amqp_client.hrl").
+
 %% gen_server callbacks
 -export([init/1,
    handle_call/3,
@@ -17,7 +19,7 @@
 
 -define(SERVER, ?MODULE).
 
--record(state, {}).
+-record(state, {consumer}).
 
 %%%===================================================================
 %%% API
@@ -54,7 +56,9 @@ start_link() ->
    {stop, Reason :: term()} | ignore).
 init([]) ->
    lager:info("~p < ~p > started",[?MODULE, self()]),
-   {ok, #state{}}.
+   {ok, Pid} = rmq_consumer:start_monitor(self(), consumer_config(<<"1.002.eb195daeff594de58a0eaee88cf1190b">>)),
+
+   {ok, #state{consumer = Pid}}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -102,7 +106,13 @@ handle_cast(_Request, State) ->
    {noreply, NewState :: #state{}} |
    {noreply, NewState :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term(), NewState :: #state{}}).
-handle_info(_Info, State) ->
+handle_info({'DOWN', _MonitorRef, process, Consumer, _Info}, #state{consumer = Consumer} = State) ->
+   lager:notice("MQ-Consumer:~p is 'DOWN'",[Consumer]),
+   {noreply, State#state{consumer = undefined}};
+handle_info(_Event = {#'basic.deliver'{delivery_tag = DTag, routing_key = _RKey},
+   #'amqp_msg'{payload = Payload, props = #'P_basic'{headers = _Headers}}}, #state{consumer = Con}=State) ->
+   lager:debug("** got q-message: ~p",[Payload]),
+   carrot:ack(Con, DTag),
    {noreply, State}.
 
 %%--------------------------------------------------------------------
@@ -138,3 +148,23 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+consumer_config(Sid) when is_binary(Sid) ->
+   {ok, HostParams} = application:get_env(carrot, broker),
+   Config =
+      [
+         {workers, 1}, % Number of connections,
+         {callback, self()},
+         {setup_type, permanent},
+         {setup,
+            [
+               {queue, [
+                  {queue, <<"qm_ruledata_", Sid/binary>>},
+                  {exchange, <<"x_ds_topic">>},
+                  {routing_key, Sid}
+               ]}
+            ]
+         }
+
+
+      ],
+   carrot_util:proplists_merge(HostParams, Config).
