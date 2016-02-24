@@ -93,9 +93,10 @@ start_link(Callback, Config) ->
 
 
 start_monitor(Callback, Config) ->
-   {ok, Pid} = gen_server:start(?MODULE, [Callback, Config], []),
-   erlang:monitor(process, Pid),
-   {ok, Pid}.
+   case gen_server:start(?MODULE, [Callback, Config], []) of
+      {ok, Pid}      -> Ref = erlang:monitor(process, Pid), {ok, Pid, Ref};
+      {error, What}  -> {error, What}
+   end.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%% gen_server API.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
