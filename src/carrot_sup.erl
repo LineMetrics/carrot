@@ -30,7 +30,7 @@ init([]) ->
 
    Children = [rmq_sup(Name, Config, HostParams) || Name <- SetupNames],
 
-   {ok, { {one_for_one, 5, 10}, Children} }.
+   {ok, { {one_for_one, 30, 20}, Children} }.
 
 
 %% Supervisor Definition for rmq_consumer workers

@@ -26,7 +26,7 @@ start_link(Name, Config) ->
 
 init([Config]) ->
    RmqWorkers = child_specs(Config),
-   {ok, { {one_for_one, 5, 10}, RmqWorkers} }.
+   {ok, { {one_for_one, 40, 15}, RmqWorkers} }.
 
 %%%%%%%%%% CHILD SPECs %%%%%%%%%%%%%%%%%%%%%
 child_specs(Config) ->
