@@ -38,7 +38,10 @@ Note: carrot is fairly new, so things may change
                           {queue, [
                              {queue, <<"cassandra_1005">>},
                              {exchange, <<"x_cassandra_topic">>}, {xname_postfix, false},
-                             {routing_key, <<"5.#">>}
+                             {routing_key, <<"5.#">>},
+                             %% optional bindings - parameter, if this is given, the q-binding-setup
+                             %% will use these routing-keys for binding, instead of the "routing_key" param
+                             {bindings, [<<"5.123">>, <<"5.234">>]}
                           ]}
                        ]
                     }

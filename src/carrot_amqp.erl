@@ -27,6 +27,8 @@
 -define(X_BIND,      'exchange.bind').
 -define(Q_BIND,      'queue.bind').
 
+-define(RKEY,        <<"routing_key">>).
+
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -57,10 +59,7 @@ setup(Channel, Config) ->
    lager:info("#setup Queue: ~p ~n ~p",["queue declared ok", QDeclare]),
    case proplists:get_value(exchange, QConfig) of
       undefined   -> ok;
-      _E          ->
-         QBind = to_queue_bind(QConfig, Type),
-         #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind),
-         lager:info("#setup Queue: ~p ~n ~n ~p",["queue bind ok", QBind])
+      _E          -> setup_bindings(Channel, QConfig, Type)
    end,
    consume_queue(Channel, QName, proplists:get_value(prefetch_count, Config, 0)).
 
@@ -81,7 +80,20 @@ consume_queue(Channel, Q, Prefetch) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%% INTERNAL %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+setup_bindings(Channel, QueueConfig, Type) ->
+   TBinding = to_queue_bind(QueueConfig, Type),
+   QBindings =
+   case proplists:get_value(bindings, QueueConfig) of
+      undefined ->
+         [TBinding];
+      Bindings when is_list(Bindings) ->
+         [TBinding#'queue.bind'{routing_key = RoutingKey} || RoutingKey <- Bindings]
+   end,
+   Bind = fun(QBind) ->
+      #'queue.bind_ok'{} = amqp_channel:call(Channel, QBind),
+      lager:debug("#setup Queue: ~p ~n ~n ~p",["queue bind ok", QBind])
+      end,
+   lists:foreach(Bind, QBindings).
 
 
 %% Converts a tuple list of values to a queue.declare record
