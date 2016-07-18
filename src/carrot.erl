@@ -4,7 +4,7 @@
 
 
 %% API
--export([start/0, load_bunnies/0, load_bunnies/1]).
+-export([start/0, load_bunnies/0, load_bunnies/1, start_monitored_consumer/1]).
 
 %% User API
 -export([ack/2, ack_multiple/2, nack/2, nack_multiple/2]).
@@ -13,6 +13,12 @@
 start() ->
    application:ensure_all_started(?MODULE, permanent).
 
+%%
+%% start a rmq_consumer instance and add the calling process as a callback-module
+%% the calling process will get a 'DOWN' Tag, if the consumer process goes down for any Reason
+%%
+start_monitored_consumer(ConsumerConfig) when is_list(ConsumerConfig) ->
+   rmq_consumer:start_monitor(self(), ConsumerConfig).
 
 %% reload bunny definition from a config-file
 load_bunnies() ->
