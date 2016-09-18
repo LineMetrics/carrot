@@ -11,7 +11,6 @@ STATUS
 ======
 we already use carrot in production, stability and throughput is satisfying
 
-@ todo documentation !!!
 
 ## The Configuration
 
