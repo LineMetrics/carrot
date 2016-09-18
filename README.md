@@ -8,8 +8,9 @@ All this is done via a simple proplist-config which is also updateable on the fl
 Note: carrot is fairly new, so things may change
 
 STATUS
-------
+======
 we already use carrot in production, stability and throughput is satisfying
+
 @ todo documentation !!!
 
 ## The Configuration
