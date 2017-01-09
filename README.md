@@ -1,11 +1,13 @@
 ### Carrot
 
-Carrot is a small Erlang app that helps Erlang Systems to easly consume and work on messages from
-a rabitmq broker by providing a callback module that handles the incoming messages.
+Carrot is a small Erlang app that helps Erlang Systems to easly consume and work on messages 
+received from a rabbit_mq-broker by providing a callback module that handles the incoming messages.
 
 All this is done via a simple proplist-config which is also updateable on the fly.
 
-Note: carrot is fairly new, so things may change
+Note: carrot is fairly new, so things will change
+
+
 
 ## The Configuration
 
@@ -61,7 +63,7 @@ Note: carrot is fairly new, so things may change
 
 ## Behaviour Callbacks
 
-Implement the rmq_consumer behaviour
+Implement the rmq_consumer behaviour (depending on the usage-strategy you use, see rmq_consumer.erl)
 
 #
 
