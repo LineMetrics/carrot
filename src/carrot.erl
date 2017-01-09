@@ -7,7 +7,7 @@
 -export([start/0, load_bunnies/0, load_bunnies/1, start_monitored_consumer/1]).
 
 %% User API
--export([ack/2, ack_multiple/2, nack/2, nack_multiple/2]).
+-export([ack/2, ack_multiple/2, nack/2, nack_multiple/2, reject/2]).
 
 
 start() ->
@@ -34,3 +34,5 @@ nack(Consumer, Tag) ->
    Consumer ! {nack, Tag}.
 nack_multiple(Consumer, Tag) ->
    Consumer ! {nack, multiple, Tag}.
+reject(Consumer, Tag) ->
+   Consumer ! {reject, Tag}.

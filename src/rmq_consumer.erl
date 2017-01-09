@@ -223,6 +223,11 @@ handle_info({nack, multiple, Tag}, State) ->
    lager:debug("nacked multiple till Tag: ~p",[Tag]),
    {noreply, State}
 ;
+handle_info({reject, Tag}, State) ->
+   amqp_channel:call(State#state.channel, #'basic.nack'{delivery_tag = Tag, multiple = false, requeue = false}),
+   lager:debug("nacked multiple till Tag: ~p",[Tag]),
+   {noreply, State}
+;
 handle_info(Msg, State) ->
    lager:error("Unhandled msg in rabbitmq_consumer : ~p", [Msg]),
    {noreply, State}.

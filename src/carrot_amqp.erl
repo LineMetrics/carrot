@@ -52,6 +52,8 @@ setup(Channel, Config) ->
 
    QConfig = proplists:get_value(queue, Setup),
 
+   lager:notice("QConfig is ~p",[QConfig]),
+
    %% declare and bind queue to exchange
    QDeclare = to_queue_declare(QConfig, Type),
 
@@ -158,7 +160,19 @@ prep_q_bind(temporary, false) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Converts a tuple list of values to a record with name RecName
 to_record(RecName, Properties, Defaults) ->
-   to_record(RecName, carrot_util:proplists_merge(Properties, Defaults)).
+%%   lager:notice("old props: ~p",[Properties]),
+   NewProps =
+   case proplists:get_value(arguments, Properties) of
+      undefined -> Properties;
+      [] -> Properties;
+      List when is_list(List) -> NewTable = to_amqp_table(List),
+                                 lists:flatten([NewTable|proplists:delete(arguments, Properties)])
+
+   end,
+%%   lager:alert("converted properties: ~p",[NewProps]),
+   Rec = to_record(RecName, carrot_util:proplists_merge(NewProps, Defaults)),
+%%   lager:notice("Record is ~p",[Rec]),
+   Rec.
 to_record(RecName, Properties) ->
    list_to_tuple([RecName|[proplists:get_value(X, Properties, false) ||
       X <- recInfo(RecName)]]).
@@ -187,3 +201,15 @@ qx_name(Prefix) ->
    NodeBinary = list_to_binary(atom_to_list(node())),
    Node = binary:replace(NodeBinary, <<"@">>, <<"-">>),
    <<Prefix/binary, <<"_">>/binary, Node/binary>>.
+
+
+to_amqp_table(Table) when is_list(Table) ->
+   CFun = fun({Key, Val}) ->
+            case Val of
+               _ when is_integer(Val)  -> {Key, signedint, Val};
+               _ when is_binary(Val)   -> {Key, longstr, Val};
+               _ when is_list(Val)     -> {Key, longstr, list_to_binary(Val)};
+               _ when is_float(Val)    -> {Key, float, Val}
+            end
+          end,
+   lists:map(CFun, Table).
