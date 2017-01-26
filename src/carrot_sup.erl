@@ -3,7 +3,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0, load_bunnies/0, load_bunnies/1]).
+-export([start_link/0, load_bunnies/0, load_bunnies/1, start_bunnies/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -14,6 +14,11 @@
 %% ===================================================================
 %% API functions
 %% ===================================================================
+start_bunnies() ->
+   {ok, Config} = application:get_env(carrot, bunnies),
+   SetupNames = proplists:get_keys(Config),
+   load_bunnies(Config, SetupNames).
+
 
 start_link() ->
    supervisor:start_link({local, ?MODULE}, ?MODULE, []).
@@ -23,14 +28,8 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-   {ok, Config} = application:get_env(carrot, bunnies),
-   {ok, HostParams} = application:get_env(carrot, broker),
-
-   SetupNames = proplists:get_keys(Config),
-
-   Children = [rmq_sup(Name, Config, HostParams) || Name <- SetupNames],
-
-   {ok, { {one_for_one, 30, 20}, Children} }.
+   %% bunnies are started manually with start_bunnies
+   {ok, { {one_for_one, 30, 20}, []} }.
 
 
 %% Supervisor Definition for rmq_consumer workers
@@ -53,9 +52,10 @@ rmq_sup(SetupName, Config, HostParams) ->
 
 load_bunnies() ->
    load_bunnies("./sys.config").
-
 load_bunnies(File) ->
    {Config, Names} = parse_file(File),
+   load_bunnies(Config, Names).
+load_bunnies(Config, Names) ->
    {ok, HostParams} = application:get_env(carrot, broker)
    ,
    Children = [rmq_sup(Name, Config, HostParams) || Name <- Names],

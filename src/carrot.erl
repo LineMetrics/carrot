@@ -4,7 +4,7 @@
 
 
 %% API
--export([start/0, load_bunnies/0, load_bunnies/1, start_monitored_consumer/1]).
+-export([start/0, load_bunnies/0, load_bunnies/1, start_monitored_consumer/1, start_bunnies/0]).
 
 %% User API
 -export([ack/2, ack_multiple/2, nack/2, nack_multiple/2, reject/2]).
@@ -12,6 +12,9 @@
 
 start() ->
    application:ensure_all_started(?MODULE, permanent).
+
+start_bunnies() ->
+   carrot_sup:start_bunnies().
 
 %%
 %% start a rmq_consumer instance and add the calling process as a callback-module
