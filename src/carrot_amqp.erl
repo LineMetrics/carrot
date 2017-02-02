@@ -166,7 +166,7 @@ to_record(RecName, Properties, Defaults) ->
       undefined -> Properties;
       [] -> Properties;
       List when is_list(List) -> NewTable = to_amqp_table(List),
-                                 lists:flatten([NewTable|proplists:delete(arguments, Properties)])
+                                 lists:flatten([{arguments, NewTable}|proplists:delete(arguments, Properties)])
 
    end,
 %%   lager:alert("converted properties: ~p",[NewProps]),
