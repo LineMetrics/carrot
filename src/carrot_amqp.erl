@@ -52,7 +52,7 @@ setup(Channel, Config) ->
 
    QConfig = proplists:get_value(queue, Setup),
 
-   lager:notice("QConfig is ~p",[QConfig]),
+%%   lager:notice("QConfig is ~p",[QConfig]),
 
    %% declare and bind queue to exchange
    QDeclare = to_queue_declare(QConfig, Type),
@@ -166,7 +166,7 @@ to_record(RecName, Properties, Defaults) ->
       undefined -> Properties;
       [] -> Properties;
       List when is_list(List) -> NewTable = to_amqp_table(List),
-                                 lists:flatten([NewTable|proplists:delete(arguments, Properties)])
+                                 lists:flatten([{arguments, NewTable}|proplists:delete(arguments, Properties)])
 
    end,
 %%   lager:alert("converted properties: ~p",[NewProps]),
@@ -174,6 +174,7 @@ to_record(RecName, Properties, Defaults) ->
 %%   lager:notice("Record is ~p",[Rec]),
    Rec.
 to_record(RecName, Properties) ->
+%%   lager:notice("to_record: ~p :: ~p~n",[RecName, Properties]),
    list_to_tuple([RecName|[proplists:get_value(X, Properties, false) ||
       X <- recInfo(RecName)]]).
 
