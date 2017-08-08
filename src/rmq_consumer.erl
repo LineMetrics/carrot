@@ -149,13 +149,24 @@ handle_info( {'DOWN', _Ref, process, _Pid, _Reason} = Req, State=#state{callback
    {noreply, State#state{callback_state = NewCallbackState}};
 
 
-handle_info({'EXIT', MQPid, Reason}, State=#state{channel = MQPid} ) ->
+handle_info({'EXIT', MQPid, Reason}, State=#state{channel = MQPid, callback = CB, callback_state = CBState} ) ->
    lager:notice("MQ channel DIED: ~p", [Reason]),
+   NCBState =
+      case {is_pid(CB), erlang:function_exported(CB, channel_down, 1)} of
+         {false, true}  ->
+            {ok, NewCBState} = CB:channel_down(CBState), NewCBState;
+         _Other         ->
+            lager:info(
+               "Function 'handle_info' not exported in Callback-Module: ~p or Callback is a process",
+               [CB]),
+            CBState
+      end,
    erlang:send_after(0, self(), connect),
    {noreply, State#state{
       channel = undefined,
       channel_ref = undefined,
-      available = false
+      available = false,
+      callback_state = NCBState
    }};
 
 handle_info({'EXIT', _OtherPid, _Reason} = Message,

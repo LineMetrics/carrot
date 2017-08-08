@@ -6,7 +6,7 @@
 
 -include("../include/amqp_client.hrl").
 %% API
--export([process/2, init/0, terminate/2, handle_info/2]).
+-export([process/2, init/0, terminate/2, handle_info/2, channel_down/1]).
 
 -record(state, {}).
 
@@ -22,6 +22,10 @@ process( {Event = #'basic.deliver'{delivery_tag = _DTag, routing_key = _RKey},
 
 handle_info({'EXIT', MQPid, Reason}, State ) ->
    lager:warning("Pid: ~p exited with Reason: ~p",[MQPid, Reason]),
+   {ok, State}.
+
+channel_down(State) ->
+   lager:warning("MQ Channel is DOWN, lets do some cleanup: ~p",["yeah"]),
    {ok, State}.
 
 terminate(_Reason, _State) ->
