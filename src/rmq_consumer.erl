@@ -68,7 +68,7 @@
 %%%
 
 %%% init the callback
--callback init() -> {ok, ProcessorState :: term()} | {error, Reason :: term()}.
+-callback init(Args :: list()) -> {ok, ProcessorState :: term()} | {error, Reason :: term()}.
 
 %%% handle a newly arrived amqp message
 -callback process(Event :: { #'basic.deliver'{}, #'amqp_msg'{} }, ProcessorState :: term()) ->
@@ -102,11 +102,12 @@ start_monitor(Callback, Config) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 -spec init(proplists:proplist()) -> {ok, state()}.
 init([Callback, Config]) ->
+   CBArgs = proplists:get_value(callback_args, Config,[]),
    process_flag(trap_exit, true),
    {Callback1, CBState} =
    case is_pid(Callback) of
       true  -> {Callback, undefined};
-      false -> {ok, CallbackState} = Callback:init(), {Callback, CallbackState}
+      false -> {ok, CallbackState} = Callback:init(CBArgs), {Callback, CallbackState}
    end,
    erlang:send_after(0, self(), connect),
    {ok, #state{config = Config, callback = Callback1, callback_state = CBState}}.

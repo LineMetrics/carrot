@@ -54,10 +54,9 @@ start_link() ->
 -spec(init(Args :: term()) ->
    {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term()} | ignore).
-init([]) ->
+init(_Args) ->
    lager:info("~p < ~p > started",[?MODULE, self()]),
    {ok, Pid} = rmq_consumer:start_monitor(self(), consumer_config(<<"1.002.eb195daeff594de58a0eaee88cf1190b">>)),
-
    {ok, #state{consumer = Pid}}.
 
 %%--------------------------------------------------------------------

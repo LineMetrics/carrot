@@ -6,13 +6,14 @@
 
 -include("../include/amqp_client.hrl").
 %% API
--export([process/2, init/0, terminate/2, handle_info/2]).
+-export([process/2, init/1, terminate/2, handle_info/2]).
 
--record(state, {}).
+-record(state, {args = undefined :: any()}).
 
-init() ->
-%%   rmq_test_server:start_link(),
-   {ok, #state{}}.
+init(Args) ->
+%%   rmq_test_server:start_link(Args),
+   lager:notice("Args for Callback ~p  are ~p",[?MODULE, Args]),
+   {ok, #state{args = Args}}.
 
 process( {Event = #'basic.deliver'{delivery_tag = _DTag, routing_key = _RKey},
          Msg = #'amqp_msg'{payload = _Msg, props = #'P_basic'{headers = _Headers}}} , #state{} = State) ->
